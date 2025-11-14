@@ -20,6 +20,33 @@ const neovimManager = NeovimManager.getInstance();
 
 // Register resources
 server.resource(
+  "instances",
+  new ResourceTemplate("nvim://instances", {
+    list: () => ({
+      resources: [{
+        uri: "nvim://instances",
+        mimeType: "application/json",
+        name: "Neovim instances",
+        description: "List of all running Neovim instances"
+      }]
+    })
+  }),
+  async (uri) => {
+    const socketPaths = await neovimManager.discoverInstances();
+    const instances = await Promise.all(
+      socketPaths.map(socketPath => neovimManager.getInstanceMetadata(socketPath))
+    );
+    return {
+      contents: [{
+        uri: uri.href,
+        mimeType: "application/json",
+        text: JSON.stringify(instances, null, 2)
+      }]
+    };
+  }
+);
+
+server.resource(
   "session",
   new ResourceTemplate("nvim://session", { 
     list: () => ({

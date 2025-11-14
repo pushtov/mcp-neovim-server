@@ -1,4 +1,6 @@
 import { attach, Neovim } from 'neovim';
+import { readdirSync, statSync } from 'fs';
+import { join } from 'path';
 
 export class NeovimConnectionError extends Error {
   constructor(socketPath: string, cause?: Error) {
@@ -61,6 +63,12 @@ interface WindowInfo {
   height: number;
   row: number;
   col: number;
+}
+
+export interface NeovimInstance {
+  socketPath: string;
+  cwd: string;
+  fileName: string;
 }
 
 export class NeovimManager {
@@ -956,5 +964,77 @@ export class NeovimManager {
       console.error('Error navigating jump list:', error);
       throw new NeovimCommandError(`jump ${direction}`, error instanceof Error ? error.message : 'Unknown error');
     }
+  }
+
+  public async discoverInstances(): Promise<string[]> {
+    const tmpDir = process.env.TMPDIR || '/tmp';
+
+    let entries: string[];
+    try {
+      entries = readdirSync(tmpDir);
+    } catch (error) {
+      console.error('Error reading temp directory:', error);
+      throw new NeovimCommandError(`discover instances in ${tmpDir}`, error instanceof Error ? error.message : 'Unknown error');
+    }
+
+    const nvimDirs = entries
+      .filter(entry => entry.startsWith('nvim.'))
+      .map(entry => join(tmpDir, entry));
+
+    return nvimDirs.flatMap(dir => this.findSocketsInDir(dir));
+  }
+
+  public async getInstanceMetadata(socketPath: string): Promise<NeovimInstance> {
+    try {
+      const nvim = attach({ socket: socketPath });
+
+      const cwd = await nvim.call('getcwd');
+      const buffer = await nvim.buffer;
+      const fileName = await buffer.name;
+
+      return {
+        socketPath,
+        cwd: String(cwd),
+        fileName: fileName || '[No Name]'
+      };
+    } catch (error) {
+      console.error('Error getting instance metadata:', error);
+      throw new NeovimCommandError(`get metadata for ${socketPath}`, error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+
+  private findSocketsInDir(dir: string): string[] {
+    const sockets: string[] = [];
+
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch (error) {
+      console.error('Error reading directory:', error);
+      throw new NeovimCommandError(`read directory ${dir}`, error instanceof Error ? error.message : 'Unknown error');
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry);
+
+      let stats;
+      try {
+        stats = statSync(fullPath);
+      } catch (error) {
+        console.error('Error stating file:', error);
+        throw new NeovimCommandError(`stat ${fullPath}`, error instanceof Error ? error.message : 'Unknown error');
+      }
+
+      if (stats.isSocket()) {
+        sockets.push(fullPath);
+        continue;
+      }
+
+      if (stats.isDirectory()) {
+        sockets.push(...this.findSocketsInDir(fullPath));
+      }
+    }
+
+    return sockets;
   }
 }
