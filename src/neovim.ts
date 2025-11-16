@@ -99,23 +99,23 @@ export class NeovimManager {
     }
   }
 
-  private async connect(): Promise<Neovim> {
-    const socketPath = process.env.NVIM_SOCKET_PATH || '/tmp/nvim';
-    this.validateSocketPath(socketPath);
-    
+  private async connect(socketPath?: string): Promise<Neovim> {
+    const resolvedPath = socketPath || process.env.NVIM_SOCKET_PATH || '/tmp/nvim';
+    this.validateSocketPath(resolvedPath);
+
     try {
       return attach({
-        socket: socketPath
+        socket: resolvedPath
       });
     } catch (error) {
       console.error('Error connecting to Neovim:', error);
-      throw new NeovimConnectionError(socketPath, error as Error);
+      throw new NeovimConnectionError(resolvedPath, error as Error);
     }
   }
 
-  public async getBufferContents(filename?: string): Promise<Map<number, string>> {
+  public async getBufferContents(socketPath?: string, filename?: string): Promise<Map<number, string>> {
     try {
-      const nvim = await this.connect();
+      const nvim = await this.connect(socketPath);
       let buffer;
       
       if (filename) {
@@ -743,9 +743,9 @@ export class NeovimManager {
     }
   }
 
-  public async getOpenBuffers(): Promise<BufferInfo[]> {
+  public async getOpenBuffers(socketPath?: string): Promise<BufferInfo[]> {
     try {
-      const nvim = await this.connect();
+      const nvim = await this.connect(socketPath);
       const buffers = await nvim.buffers;
       const windows = await nvim.windows;
       const bufferInfos: BufferInfo[] = [];

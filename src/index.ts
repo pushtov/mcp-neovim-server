@@ -48,18 +48,19 @@ server.resource(
 
 server.resource(
   "session",
-  new ResourceTemplate("nvim://session", { 
+  new ResourceTemplate("nvim://session{?socket}", {
     list: () => ({
       resources: [{
         uri: "nvim://session",
         mimeType: "text/plain",
         name: "Current neovim session",
-        description: "Current neovim text editor session"
+        description: "Current neovim text editor session. Query params: ?socket=<path> (optional, defaults to auto-detect)"
       }]
     })
   }),
   async (uri) => {
-    const bufferContents = await neovimManager.getBufferContents();
+    const socketPath = uri.searchParams.get('socket') || undefined;
+    const bufferContents = await neovimManager.getBufferContents(socketPath);
     return {
       contents: [{
         uri: uri.href,
@@ -74,18 +75,19 @@ server.resource(
 
 server.resource(
   "buffers",
-  new ResourceTemplate("nvim://buffers", { 
+  new ResourceTemplate("nvim://buffers{?socket}", {
     list: () => ({
       resources: [{
         uri: "nvim://buffers",
         mimeType: "application/json",
         name: "Open Neovim buffers",
-        description: "List of all open buffers in the current Neovim session"
+        description: "List of all open buffers in the current Neovim session. Query params: ?socket=<path> (optional, defaults to auto-detect)"
       }]
     })
   }),
   async (uri) => {
-    const openBuffers = await neovimManager.getOpenBuffers();
+    const socketPath = uri.searchParams.get('socket') || undefined;
+    const openBuffers = await neovimManager.getOpenBuffers(socketPath);
     return {
       contents: [{
         uri: uri.href,
@@ -103,7 +105,7 @@ server.tool(
   { filename: z.string().optional().describe("Optional file name to view a specific buffer") },
   async ({ filename }) => {
     try {
-      const bufferContents = await neovimManager.getBufferContents(filename);
+      const bufferContents = await neovimManager.getBufferContents(undefined, filename);
       return {
         content: [{
           type: "text",
@@ -187,7 +189,7 @@ server.tool(
 server.tool(
   "vim_edit",
   "Edit buffer content using insert, replace, or replaceAll modes",
-  { 
+  {
     startLine: z.number().describe("The line number where editing should begin (1-indexed)"),
     mode: z.enum(["insert", "replace", "replaceAll"]).describe("Whether to insert new content, replace existing content, or replace entire buffer"),
     lines: z.string().describe("The text content to insert or use as replacement")
@@ -215,7 +217,7 @@ server.tool(
 server.tool(
   "vim_window",
   "Manage Neovim windows: split, close, and navigate between windows",
-  { 
+  {
     command: z.enum(["split", "vsplit", "only", "close", "wincmd h", "wincmd j", "wincmd k", "wincmd l"])
       .describe("Window manipulation command: split or vsplit to create new window, only to keep just current window, close to close current window, or wincmd with h/j/k/l to navigate between windows")
   },
@@ -619,7 +621,7 @@ server.tool(
 
 // Register a sample prompt for Neovim workflow assistance
 server.prompt(
-  "neovim_workflow", 
+  "neovim_workflow",
   "Get help with common Neovim workflows and editing tasks",
   {
     task: z.enum(["editing", "navigation", "search", "buffers", "windows", "macros"]).describe("Type of Neovim task you need help with")
